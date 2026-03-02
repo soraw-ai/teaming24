@@ -359,12 +359,12 @@ TEAMING24_WALLET_PRIVATE_KEY=0x...
 
 ## Star History
 
-[![Star History Chart](https://api.star-history.com/svg?repos=soraw-ai/teaming24&type=Date)](https://star-history.com/#teaming24/teaming24&Date)
-
-## Contributors
-
-<a href="https://github.com/soraw-ai/teaming24/graphs/contributors">
-  <img src="https://contrib.rocks/image?repo=soraw-ai/teaming24" alt="Contributors" />
+<a href="https://www.star-history.com/#teaming24/teaming24&type=date&legend=top-left">
+ <picture>
+   <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/svg?repos=teaming24/teaming24&type=date&theme=dark&legend=top-left" />
+   <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/svg?repos=teaming24/teaming24&type=date&legend=top-left" />
+   <img alt="Star History Chart" src="https://api.star-history.com/svg?repos=teaming24/teaming24&type=date&legend=top-left" />
+ </picture>
 </a>
 
 ## Thanks
