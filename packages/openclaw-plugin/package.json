@@ -1,0 +1,14 @@
+{
+  "name": "@teaming24/openclaw-plugin",
+  "version": "1.0.0",
+  "description": "OpenClaw plugin that exposes Teaming24's multi-agent execution, distributed network, and x402 payments as OpenClaw agent tools",
+  "main": "src/index.ts",
+  "scripts": {
+    "build": "tsc -p tsconfig.json --noEmit"
+  },
+  "keywords": ["openclaw", "teaming24", "multi-agent", "ai"],
+  "license": "MIT",
+  "devDependencies": {
+    "typescript": "^5.0.0"
+  }
+}

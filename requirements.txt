@@ -1,0 +1,38 @@
+# ============================================================================
+# Teaming24 — pip fallback (single source of truth is pyproject.toml)
+# ============================================================================
+# Recommended: use uv for dependency management
+#   uv sync                   # install all deps + create venv
+#   uv run python main.py     # run without activating venv
+#
+# pip fallback:
+#   pip install -r requirements.txt
+# ============================================================================
+
+# Core server
+fastapi>=0.109.0
+uvicorn[standard]>=0.27.0
+wsproto>=1.2.0
+pydantic>=2.5.0
+pyyaml>=6.0.0
+python-dotenv>=1.0.0
+httpx>=0.26.0
+
+# x402 Payment Protocol — https://x402.gitbook.io/x402
+x402[evm]>=2.0.0
+web3>=7.0.0
+eth-account>=0.13.0
+
+# Sandbox — browser automation
+playwright>=1.57.0
+
+# Multi-Agent Framework
+crewai>=1.0.0
+
+# LLM routing (ANRouter)
+litellm>=1.0.0
+
+# OpenHands runtime integration
+openhands-sdk>=1.11.0
+openhands-tools>=1.11.0
+openhands-workspace>=1.11.0

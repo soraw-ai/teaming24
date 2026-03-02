@@ -1,0 +1,605 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  font-family: Inter, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', 
+    Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+  line-height: 1.5;
+  font-weight: 400;
+  color-scheme: dark;
+  color: rgba(255, 255, 255, 0.87);
+  background-color: #0f0f0f;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html, body, #root {
+  height: 100%;
+  width: 100%;
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #333;
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #444;
+}
+
+/* Hide scrollbar for Chrome, Safari and Opera */
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
+/* Hide scrollbar for IE, Edge and Firefox */
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+/* Thin scrollbar */
+.thin-scrollbar {
+  scrollbar-width: thin;
+}
+
+/* Typing animation */
+@keyframes blink {
+  0%, 50% { opacity: 1; }
+  51%, 100% { opacity: 0; }
+}
+
+.typing-cursor::after {
+  content: '|';
+  animation: blink 1s infinite;
+  margin-left: 2px;
+}
+
+/* Fade in animation */
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes marketplaceCardIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px) scale(0.985);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes marketplaceModalIn {
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(0.985);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes marketplaceDrawerIn {
+  from {
+    opacity: 0;
+    transform: translateX(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes marketplaceNewNodePulse {
+  0% {
+    box-shadow: 0 0 0 0 rgba(52, 211, 153, 0.32);
+  }
+  70% {
+    box-shadow: 0 0 0 12px rgba(52, 211, 153, 0);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(52, 211, 153, 0);
+  }
+}
+
+.fade-in {
+  animation: fadeIn 0.3s ease-out;
+}
+
+.marketplace-card-in {
+  animation: marketplaceCardIn 280ms ease-out both;
+}
+
+.marketplace-modal-in {
+  animation: marketplaceModalIn 200ms ease-out both;
+}
+
+.marketplace-drawer-in {
+  animation: marketplaceDrawerIn 220ms ease-out both;
+}
+
+.marketplace-new-node {
+  animation: marketplaceNewNodePulse 1.2s ease-out 2;
+}
+
+/* Resize handle cursor */
+[data-panel-resize-handle-id] {
+  cursor: col-resize;
+}
+
+[data-panel-group-direction="vertical"] [data-panel-resize-handle-id] {
+  cursor: row-resize;
+}
+
+/* Active resize state */
+[data-resize-handle-active] {
+  background-color: rgba(59, 130, 246, 0.1);
+}
+
+/* GPU-accelerated transforms for smoother animations */
+.transform-gpu {
+  transform: translateZ(0);
+  backface-visibility: hidden;
+}
+
+/* Reduce motion for accessibility */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  ::before,
+  ::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* Focus visible for better keyboard navigation */
+:focus-visible {
+  outline: 2px solid rgba(56, 189, 248, 0.5);
+  outline-offset: 2px;
+}
+
+/* Better button active states */
+button:active:not(:disabled) {
+  transform: scale(0.98);
+}
+
+/* Smooth scrolling */
+html {
+  scroll-behavior: smooth;
+}
+
+/* Dot pulse loading animation */
+.dot-pulse {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+}
+
+.dot-pulse span {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: currentColor;
+  animation: dotPulse 1.4s infinite ease-in-out both;
+}
+
+.dot-pulse span:nth-child(1) { animation-delay: -0.32s; }
+.dot-pulse span:nth-child(2) { animation-delay: -0.16s; }
+.dot-pulse span:nth-child(3) { animation-delay: 0s; }
+
+@keyframes dotPulse {
+  0%, 80%, 100% { transform: scale(0); opacity: 0.5; }
+  40% { transform: scale(1); opacity: 1; }
+}
+
+/* Scroll to bottom button */
+.scroll-bottom-btn {
+  position: absolute;
+  right: 16px;
+  bottom: 16px;
+  width: 36px;
+  height: 36px;
+  background: rgba(30, 30, 30, 0.9);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 50%;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.2s ease, background 0.15s ease;
+  z-index: 10;
+  backdrop-filter: blur(8px);
+}
+
+.scroll-bottom-btn:hover {
+  background: rgba(50, 50, 50, 0.95);
+}
+
+.scroll-bottom-btn.visible {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+/* Code block language label */
+.code-lang-label {
+  position: absolute;
+  top: 0;
+  left: 0;
+  padding: 2px 8px;
+  font-size: 10px;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.4);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  user-select: none;
+}
+
+/* Action tooltip */
+.action-tooltip {
+  position: absolute;
+  bottom: calc(100% + 6px);
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(0, 0, 0, 0.9);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 500;
+  padding: 4px 8px;
+  border-radius: 4px;
+  white-space: nowrap;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.15s ease;
+  z-index: 50;
+}
+
+.action-btn:hover .action-tooltip {
+  opacity: 1;
+}
+
+/* Message action button */
+.msg-action-btn {
+  position: relative;
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: none;
+  border: none;
+  cursor: pointer;
+  border-radius: 6px;
+  color: rgba(255, 255, 255, 0.4);
+  transition: background 0.15s ease, color 0.15s ease;
+}
+
+.msg-action-btn:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: rgba(255, 255, 255, 0.8);
+}
+
+/* Collapsible thinking toggle */
+.thinking-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.4);
+  padding: 4px 0;
+  transition: color 0.15s ease;
+}
+
+.thinking-toggle:hover {
+  color: rgba(255, 255, 255, 0.6);
+}
+
+.thinking-toggle svg {
+  transition: transform 0.2s ease;
+}
+
+.thinking-toggle.collapsed svg {
+  transform: rotate(-90deg);
+}
+
+/* Thinking toggle streaming state */
+.thinking-toggle.streaming {
+  color: rgba(147, 51, 234, 0.8);
+}
+
+.thinking-toggle.streaming:hover {
+  color: rgba(147, 51, 234, 1);
+}
+
+/* Thinking content */
+.thinking-content {
+  border-left: 2px solid rgba(147, 51, 234, 0.3);
+  padding-left: 12px;
+  padding-top: 8px;
+  padding-bottom: 8px;
+  margin-top: 4px;
+  color: rgba(255, 255, 255, 0.5);
+  font-size: 13px;
+  line-height: 1.5;
+  background: rgba(147, 51, 234, 0.03);
+  border-radius: 0 8px 8px 0;
+}
+
+.thinking-content.streaming {
+  border-left-color: rgba(147, 51, 234, 0.6);
+  background: rgba(147, 51, 234, 0.05);
+}
+
+/* Thinking dot pulse animation */
+.thinking-dot-pulse {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background-color: rgba(147, 51, 234, 0.8);
+  animation: thinking-pulse 1.2s ease-in-out infinite;
+}
+
+@keyframes thinking-pulse {
+  0%, 100% {
+    opacity: 0.4;
+    transform: scale(0.8);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+/* Fade in animation for steps */
+@keyframes fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-fade-in {
+  animation: fade-in 0.2s ease-out;
+}
+
+/* Thinking wrapper */
+.thinking-wrap {
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+/* Step number badge pulse when streaming */
+@keyframes step-pulse {
+  0%, 100% {
+    box-shadow: 0 0 0 0 rgba(147, 51, 234, 0.4);
+  }
+  50% {
+    box-shadow: 0 0 0 4px rgba(147, 51, 234, 0);
+  }
+}
+
+.thinking-content.streaming .animate-fade-in:last-of-type > div:first-child span:first-child {
+  animation: step-pulse 1.5s ease-in-out infinite;
+}
+
+/* Shimmer effect for streaming thinking */
+@keyframes shimmer {
+  0% {
+    background-position: -200% 0;
+  }
+  100% {
+    background-position: 200% 0;
+  }
+}
+
+.thinking-shimmer {
+  position: relative;
+  overflow: hidden;
+}
+
+.thinking-shimmer::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    rgba(147, 51, 234, 0.1) 50%,
+    transparent 100%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 2s infinite;
+  pointer-events: none;
+}
+
+/* Typing indicator dots */
+.typing-dots {
+  display: inline-flex;
+  gap: 4px;
+  padding: 4px 8px;
+}
+
+.typing-dots span {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: rgba(147, 51, 234, 0.6);
+  animation: typing-bounce 1.4s ease-in-out infinite;
+}
+
+.typing-dots span:nth-child(1) { animation-delay: 0s; }
+.typing-dots span:nth-child(2) { animation-delay: 0.2s; }
+.typing-dots span:nth-child(3) { animation-delay: 0.4s; }
+
+@keyframes typing-bounce {
+  0%, 60%, 100% {
+    transform: translateY(0);
+    opacity: 0.4;
+  }
+  30% {
+    transform: translateY(-4px);
+    opacity: 1;
+  }
+}
+
+/* Smooth collapse animation */
+.thinking-content {
+  transition: max-height 0.3s ease-out, opacity 0.3s ease-out;
+}
+
+/* Step slide in animation */
+@keyframes slide-in {
+  from {
+    opacity: 0;
+    transform: translateX(-8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+.animate-slide-in {
+  animation: slide-in 0.25s ease-out;
+}
+
+/* Step icon animations */
+.step-icon-analyzing {
+  animation: spin 2s linear infinite;
+}
+
+.step-icon-complete {
+  animation: pop 0.3s ease-out;
+}
+
+@keyframes pop {
+  0% { transform: scale(0.8); }
+  50% { transform: scale(1.1); }
+  100% { transform: scale(1); }
+}
+
+/* Typing effect for streaming text */
+.typing-effect {
+  overflow: hidden;
+  animation: fade-in-up 0.3s ease-out;
+}
+
+@keyframes fade-in-up {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Slow spin animation for active step */
+.animate-spin-slow {
+  animation: spin 3s linear infinite;
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+/* Cursor blink for typing */
+.typing-cursor::after {
+  content: '▌';
+  animation: blink 1s step-end infinite;
+  color: rgba(147, 51, 234, 0.8);
+}
+
+/* Inline typing cursor for TypewriterText component */
+.typing-cursor-inline {
+  display: inline;
+  animation: blink 1s step-end infinite;
+  color: rgba(147, 51, 234, 0.8);
+  font-weight: normal;
+  margin-left: 1px;
+}
+
+@keyframes blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0; }
+}
+
+/* Smooth max-height transition for collapsible sections */
+.thinking-wrap .thinking-content {
+  overflow-y: auto;
+  transition: max-height 0.3s ease-out, opacity 0.2s ease-out;
+}
+
+/* Scrollbar for thinking content */
+.thinking-content::-webkit-scrollbar {
+  width: 4px;
+}
+
+.thinking-content::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.thinking-content::-webkit-scrollbar-thumb {
+  background: rgba(147, 51, 234, 0.3);
+  border-radius: 2px;
+}
+
+.thinking-content::-webkit-scrollbar-thumb:hover {
+  background: rgba(147, 51, 234, 0.5);
+}
+
+/* Progress bar animated stripe */
+@keyframes progress-stripe {
+  0% { background-position: 16px 0; }
+  100% { background-position: 0 0; }
+}
+
+/* Progress bar glow pulse */
+@keyframes progress-glow {
+  0%, 100% { box-shadow: 0 0 4px 0 rgba(56, 189, 248, 0.3); }
+  50% { box-shadow: 0 0 8px 2px rgba(56, 189, 248, 0.5); }
+}
+
+.progress-bar-glow {
+  animation: progress-glow 2s ease-in-out infinite;
+}

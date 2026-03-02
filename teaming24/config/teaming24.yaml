@@ -1,0 +1,1717 @@
+# =============================================================================
+# Teaming24 Configuration — Single Source of Truth
+# =============================================================================
+#
+# ALL tunable parameters for the entire system live here.
+# No magic values exist anywhere in the source code.
+#
+# Structure:
+#   system.*             Server, API, frontend, database, logging
+#   security.*           Authentication, encryption, rate limiting
+#   llm.*                LLM providers and model catalog
+#   framework.*          Local multi-agent execution backend
+#   agents.*             Agent definitions and worker selection
+#   an_router.*          Cross-node routing (Agentic Node level)
+#   local_agent_router.* Local worker routing (Worker level)
+#   network.*            Node identity, discovery, peer connectivity
+#   channels.*           Telegram / Slack / Discord adapters
+#   bindings.*           Channel-to-agent routing rules
+#   session.*            Multi-turn conversation session behavior
+#   scheduler.*          Scheduled task execution
+#   tools.*              Agent-facing tools and tool-specific limits
+#   runtime.*            Sandbox, OpenHands, execution, memory
+#   output.*             Task result persistence and cleanup
+#   payment.*            x402 crypto-payment protocol
+#   extensions.*         Optional integrations and plugins
+#
+# Environment variable overrides (take precedence over this file):
+#   TEAMING24_PORT          → system.server.port
+#   TEAMING24_HOST          → system.server.host
+#   TEAMING24_LOG_LEVEL     → system.logging.level
+#   TEAMING24_DB_PATH       → system.database.path
+#   TEAMING24_CONFIG        → Load a different YAML file entirely
+#
+# =============================================================================
+
+
+# =============================================================================
+# SYSTEM CONFIGURATION
+# =============================================================================
+system:
+
+  # ---------------------------------------------------------------------------
+  # Server
+  # ---------------------------------------------------------------------------
+  server:
+    # Bind address for the FastAPI/Uvicorn server.
+    # Options: "0.0.0.0" (all interfaces), "127.0.0.1" (localhost only)
+    host: "0.0.0.0"
+
+    # TCP port the backend listens on.  Also used for the production frontend.
+    # Range: 1–65535.  Common choices: 8000, 8080, 3000.
+    port: 8000
+
+    # Number of Uvicorn worker processes.
+    # 1 = single-process (simplest).  >1 = multi-process (higher throughput).
+    # NOTE: --reload is incompatible with workers > 1.
+    workers: 1
+
+    # Enable hot-reload on source-code changes.
+    # Options: true, false.  Use true only during development.
+    reload: false
+
+  # ---------------------------------------------------------------------------
+  # API
+  # ---------------------------------------------------------------------------
+  api:
+    # Full base URL advertised to clients.  Updated automatically when
+    # TEAMING24_PORT is set.
+    base_url: "http://localhost:8000"
+
+    # Path prefix for all REST endpoints (e.g. /api/agent/execute).
+    prefix: "/api"
+
+    # Serve the Swagger/OpenAPI docs UI at /docs.
+    # Options: true, false.  Set false in production to hide internals.
+    docs_enabled: true
+
+    # ── Timeouts (seconds) ──
+
+    # Sandbox heartbeat: if no heartbeat received for this many seconds,
+    # the sandbox is marked "disconnected".
+    heartbeat_timeout: 60
+
+    # SSE queue wait: how long the SSE generator waits for a new message
+    # before sending a keep-alive ping.  Lower = more keep-alives.
+    sse_keepalive_timeout: 15.0
+
+    # Default HTTP client timeout used for outbound requests (e.g. node
+    # connection, marketplace calls).
+    http_client_timeout: 10.0
+
+    # Timeout for `docker stop` commands issued by the server.
+    docker_stop_timeout: 10
+
+    # Small delay inserted between SSE streaming chunks to smooth the
+    # typewriter effect in the frontend.
+    streaming_chunk_delay: 0.02
+
+    # Max chars to stream for chat task result before truncating the stream.
+    # Full content is always sent in the final result event; this only affects
+    # the incremental stream. Higher values allow longer code/data outputs.
+    stream_truncate: 12000
+
+    # SSE update-queue wait: max seconds the network-events SSE generator
+    # blocks on its internal queue before yielding control.
+    update_queue_timeout: 30.0
+
+    # Heartbeat interval for the task-execution SSE stream (seconds).
+    # A "heartbeat" event is emitted this often when idle. Shorter = more responsive.
+    task_heartbeat_interval: 1.0
+
+    # Timeout for the step-queue `get()` call inside the task streaming
+    # generator.  Short values keep the generator responsive when steps arrive.
+    step_queue_timeout: 0.2
+
+    # Idle timeout: task fails if no step/keepalive for this many seconds.
+    # 0 = disabled — keep waiting indefinitely while task runs (recommended).
+    # >0 = fail task after N seconds of no activity. Timer resets on step/keepalive.
+    task_execution_timeout: 0
+
+    # ── Health check ──
+
+    # How often the background health-check loop runs (seconds).
+    # Each round pings all outbound and inbound peers.
+    health_check_interval: 20
+
+    # HTTP timeout for individual health-check requests to peers.
+    health_check_http_timeout: 5.0
+
+    # Number of consecutive health-check failures before marking an
+    # outbound peer as "offline".  Higher values tolerate transient
+    # timeouts when a remote AN is busy executing a long task.
+    # Options: any positive integer.  Default: 10
+    outbound_max_failures: 10
+
+    # Inbound peers that haven't re-handshaked in this many seconds are
+    # removed as stale.
+    inbound_stale_timeout: 300
+
+    # ── Limits ──
+
+    # Max number of SSE events kept in memory per stream (ring buffer).
+    max_events_kept: 100
+
+    # Default page size when listing tasks via GET /api/agent/tasks.
+    task_list_default_limit: 20
+
+    # Max size of the SSE subscription queue (per subscriber).
+    subscription_queue_size: 100
+
+    # Max size of the update queue for network-events SSE generator.
+    update_queue_size: 100
+
+    # Timeout (seconds) for routing/payment approval requests.
+    approval_timeout: 120
+
+    # Agent event buffer capacity (SSE replay on reconnect).
+    event_buffer_capacity: 500
+
+    # Max polling iterations for demo/health polling loops in frontend tooling.
+    max_demo_poll_iterations: 300
+
+    # Step/event payload truncation limits (characters).
+    # Used when persisting steps to TaskManager and when broadcasting to Dashboard.
+    step_content_max_chars: 3000   # Max chars for step content in task history.
+    step_thought_max_chars: 3000   # Max chars for agent thought/reasoning.
+    step_observation_max_chars: 2000  # Max chars for tool observation output.
+    # Truncation for SSE streaming events (smaller for real-time performance).
+    step_event_content_max_chars: 1000   # Content in agent_step SSE events.
+    step_event_thought_max_chars: 500    # Thought in agent_step SSE events.
+    step_event_observation_max_chars: 500  # Observation in agent_step SSE events.
+    step_event_string_repr_max_chars: 500  # Fallback when output has no structured content.
+
+    # Agent result aggregation (Organizer merge of multi-source results).
+    result_empty_threshold: 50      # Min chars to consider result non-empty; below = use fallback.
+    result_fallback_min_chars: 80    # Min step content length to use as fallback when Organizer returns empty.
+    aggregate_context_max_chars: 16000  # Max chars of raw results sent to LLM for merge.
+    aggregate_output_max_chars: 5000   # Max chars in merged output (LLM instruction).
+    aggregate_llm_min_response: 80    # Min LLM response length to accept; shorter = use raw concatenation.
+
+    # Self-improvement rounds — how many times the Organizer may re-dispatch
+    # the task if the previous result was judged incomplete or incorrect.
+    # Fewer rounds = faster completion; agent can give up when impossible.
+    max_execution_rounds: 2
+
+    # local team coordinator refinement: retry Workers before returning to Organizer
+    # if result is empty or too short. 1 = no local refinement.
+    local_coordinator_max_refinement_rounds: 1
+
+    # Max chars of the previous result passed to the Organizer LLM when it
+    # evaluates whether the result fully satisfies the original request.
+    execution_round_eval_ctx_chars: 6000
+
+    # Quality gate and independent verifier.
+    quality_gate_enabled: true
+    quality_benchmark_profile: "balanced"   # fast | balanced | strict
+    quality_verifier_enabled: true
+    quality_verifier_model: "flock/gpt-5.2"
+    quality_verifier_temperature: 0.0
+    quality_confidence_threshold: 0.55
+    quality_auto_fallback_low_confidence: true
+
+    # Optional per-task-class policy overrides.
+    # Classes: empirical, coding, analysis, general
+    # Fields: max_rounds, min_result_chars, min_evidence_score, confidence_threshold
+    quality_task_class_policies:
+      empirical:
+        confidence_threshold: 0.50
+        min_evidence_score: 0
+
+  # ---------------------------------------------------------------------------
+  # Frontend (Vite dev server only — production serves from backend)
+  # ---------------------------------------------------------------------------
+  frontend:
+    # Hostname the Vite dev server binds to.
+    dev_host: "localhost"
+
+    # Port the Vite dev server listens on.
+    # Must differ from system.server.port to avoid conflicts.
+    dev_port: 8088
+
+  # ---------------------------------------------------------------------------
+  # CORS (Cross-Origin Resource Sharing)
+  # ---------------------------------------------------------------------------
+  cors:
+    # List of origins allowed to make cross-origin requests.
+    # Use ["*"] to allow all origins (allow_credentials must be false when using "*").
+    # Override: TEAMING24_CORS_ORIGINS env var (comma-separated) appends extra origins.
+    allow_origins: ["*"]
+
+    # Allow cookies / Authorization headers. Must be false when allow_origins is ["*"].
+    allow_credentials: false
+
+    # HTTP methods allowed.  ["*"] = all methods.
+    allow_methods: ["*"]
+
+    # HTTP headers allowed.  ["*"] = all headers.
+    allow_headers: ["*"]
+
+  # ---------------------------------------------------------------------------
+  # Database
+  # ---------------------------------------------------------------------------
+  database:
+    # Path to the SQLite database file.  Supports ~ expansion.
+    # Override: TEAMING24_DB_PATH env var.
+    path: "~/.teaming24/data.db"
+
+    # Automatically create / migrate tables on startup.
+    # Options: true, false.  Set false if you manage migrations manually.
+    auto_migrate: true
+
+  # ---------------------------------------------------------------------------
+  # Dev Mode
+  # ---------------------------------------------------------------------------
+  # Controls which worker set to load.
+  #   enabled: true  → loads agents.dev_workers
+  #   enabled: false → loads agents.prod_workers
+  # All built-in worker definition modules load automatically.
+  # If agents.demo_active_group_id is set, that demo worker group overrides
+  # agents.dev_workers and selects workers directly from simulation_worker_groups.
+  dev_mode:
+    # Master switch: true = development, false = production.
+    enabled: true
+
+  # ---------------------------------------------------------------------------
+  # Task Manager
+  # ---------------------------------------------------------------------------
+  # Runtime cache and cleanup behavior for in-memory task tracking.
+  task_manager:
+    # Maximum number of tasks kept in memory before eviction.
+    max_tasks_in_memory: 1000
+
+    # Expire completed/failed/cancelled tasks older than this many seconds.
+    # 86400 = 24 hours.
+    task_expiry_seconds: 86400
+
+    # Minimum interval between cleanup passes (seconds).
+    cleanup_interval_seconds: 300
+
+    # Default list size for TaskManager.list_tasks() calls without explicit limit.
+    list_tasks_default_limit: 100
+
+    # Default progress percentages per phase (0–100).
+    # Keys must match TaskPhase values exactly.  Used for Dashboard progress bar.
+    phase_percentages:
+      received: 5       # Task received by Organizer.
+      routing: 10       # ANRouter deciding pool members.
+      dispatching: 20   # Dispatching to Coordinator(s).
+      executing: 30    # Workers actively executing.
+      aggregating: 85   # Organizer merging results.
+      completed: 100    # Task finished.
+
+  # ---------------------------------------------------------------------------
+  # Logging
+  # ---------------------------------------------------------------------------
+  logging:
+    # Minimum log level.
+    # Options: "DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"
+    # Override: TEAMING24_LOG_LEVEL env var.
+    level: "INFO"
+
+    # Python logging format string.
+    format: "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+
+    # Log file path.  null = console only.  Set a path to also log to file.
+    file: null
+
+
+# =============================================================================
+# SECURITY CONFIGURATION
+# =============================================================================
+security:
+
+  # ── JWT Authentication ──
+  jwt:
+    # HMAC secret for signing JWT tokens.
+    # IMPORTANT: change this to a strong random string in production.
+    secret: "change-this-in-production"
+
+    # Signing algorithm.  Options: "HS256", "HS384", "HS512".  HS256 is typical.
+    algorithm: "HS256"
+
+    # Access-token expiry in seconds.  3600 = 1 hour.
+    expiration: 3600
+
+    # Refresh-token expiry in seconds.  604800 = 7 days.
+    refresh_expiration: 604800
+
+  # ── API Key Authentication ──
+  api_keys:
+    # Enable API key auth alongside (or instead of) JWT.
+    # Options: true, false.
+    enabled: false
+
+    # HTTP header name that carries the API key.
+    header_name: "X-API-Key"
+
+    # List of allowed keys.  Uncomment and populate to use.
+    # keys:
+    #   - name: "admin"
+    #     key: "sk-xxx"
+    #     permissions: ["*"]    # ["*"] = all, or list specific scopes
+
+  # ── Rate Limiting ──
+  rate_limit:
+    # Enable request rate limiting.  Options: true, false.
+    enabled: true
+
+    # Max requests per minute per client (sustained rate).
+    requests_per_minute: 60
+
+    # Burst allowance above the sustained rate (extra requests allowed in short bursts).
+    burst: 10
+
+  # ── Message Encryption ──
+  encryption:
+    # Encrypt agent-to-agent messages on the wire.
+    # Options: true, false.  Requires both sides to enable.
+    enabled: false
+
+    # Encryption algorithm.  Options: "AES-256-GCM".
+    algorithm: "AES-256-GCM"
+
+  # Require a password when an AN tries to connect.
+  # null = no password required.  Set a string to enforce.
+  connection_password: null
+
+
+# =============================================================================
+# LLM CONFIGURATION
+# =============================================================================
+# Configure LLM providers.  API keys should be set via environment variables.
+# Use ${ENV_VAR} syntax in api_key fields; resolved at runtime.
+llm:
+  # Default provider when no provider prefix is given in a model string.
+  # Options: "openai", "anthropic", "local", or any custom provider key below.
+  default_provider: "flock"
+
+  # Provider definitions.  Each has: enabled, api_key, base_url, models, default_model.
+  providers:
+    # ── OpenAI ──
+    openai:
+      # Enable this provider.  Options: true, false.
+      enabled: true
+      # API key.  Use ${ENV_VAR} syntax; resolved at runtime.
+      api_key: "${OPENAI_API_KEY}"
+      # Base URL for the OpenAI-compatible API.
+      base_url: "https://api.openai.com/v1"
+      # Model definitions.  Each model has:
+      #   id             — model identifier (e.g. "gpt-5.2", "gpt-4")
+      #   context_length — max input+output tokens the model supports
+      #   input_price    — USD per 1K input tokens (for cost tracking)
+      #   output_price   — USD per 1K output tokens (for cost tracking)
+      models:
+        - id: "gpt-5.2"
+          context_length: 256000
+          input_price: 0.005      # USD per 1K input tokens
+          output_price: 0.015     # USD per 1K output tokens
+        - id: "gpt-5.3-codex"
+          context_length: 256000
+          input_price: 0.005
+          output_price: 0.015
+        - id: "gpt-5.2-pro"
+          context_length: 256000
+          input_price: 0.005
+          output_price: 0.015
+        - id: "gpt-5-mini"
+          context_length: 128000
+          input_price: 0.001
+          output_price: 0.003
+      # Default model when agent specifies "openai" without a model id.
+      default_model: "gpt-5.2"
+
+    # ── Anthropic ──
+    anthropic:
+      enabled: true
+      api_key: "${ANTHROPIC_API_KEY}"
+      base_url: "https://api.anthropic.com"
+      models:
+        - id: "claude-opus-4-6"
+          context_length: 200000
+          input_price: 0.015
+          output_price: 0.075
+        - id: "claude-sonnet-4-6"
+          context_length: 200000
+          input_price: 0.003
+          output_price: 0.015
+      # Default model when agent specifies "anthropic" without a model id.
+      default_model: "claude-sonnet-4-6"
+
+    # ── FLock.io (OpenAI-compatible endpoint) ──
+    flock:
+      enabled: true
+      api_key: "${FLOCK_API_KEY}"
+      base_url: "https://api.flock.io/v1"
+      # FLock endpoint is OpenAI-compatible; route via LiteLLM openai provider.
+      litellm_provider: "openai"
+      models:
+        - id: "gpt-5.2"
+          context_length: 256000
+        - id: "qwen3-max"
+          context_length: 32768
+        - id: "gemini/gemini-2.5-pro"
+          context_length: 1048576
+        - id: "gpt-5.3-codex"
+          context_length: 256000
+        - id: "gpt-5.2-pro"
+          context_length: 256000
+        - id: "gpt-5-mini"
+          context_length: 128000
+      default_model: "gpt-5.2"
+
+    # ── Local / Self-hosted (Ollama, vLLM, etc.) ──
+    local:
+      enabled: false
+      # Ollama default endpoint.  Change for vLLM or other servers.
+      base_url: "http://localhost:11434/v1"
+      # Local endpoints are usually OpenAI-compatible.
+      litellm_provider: "openai"
+      api_key: "${LOCAL_LLM_API_KEY}"
+      models:
+        - id: "llama3.1"
+          context_length: 4096
+        - id: "qwen2.5-coder"
+          context_length: 4096
+        - id: "mistral"
+          context_length: 8192
+      # Default model when agent specifies "local" without a model id.
+      default_model: "llama3.1"
+
+    # Add more providers as needed (Google, Cohere, etc.):
+    # google:
+    #   enabled: false
+    #   api_key: "${GOOGLE_API_KEY}"
+    #   base_url: "https://generativelanguage.googleapis.com/v1beta"
+    #   models: [...]
+
+
+# =============================================================================
+# FRAMEWORK — Multi-agent execution backend
+# =============================================================================
+# Selects which runtime LocalCrew uses for local task execution.
+#   "native"  — teaming24's own agentic loop (litellm + tool calling).
+#   "crewai"  — CrewAI Crew.kickoff() (requires the crewai package).
+
+framework:
+  # Execution backend.  "native" = built-in; "crewai" = CrewAI framework.
+  backend: "native"
+
+  # Native framework settings (used when backend: "native").
+  native:
+    max_iterations: 40       # Max agent loop iterations before stopping.
+    planning_model: "flock/gpt-5.2"  # LLM for task planning / decomposition.
+
+  # CrewAI framework settings (used when backend: "crewai").
+  crewai:
+    verbose: false           # Enable verbose CrewAI console output.
+    memory: false            # Enable CrewAI conversation memory across tasks.
+    planning: false          # Enable CrewAI planning mode.
+    planning_llm: "flock/gpt-5.2"  # LLM for CrewAI planning steps.
+
+
+# =============================================================================
+# AGENTS CONFIGURATION (CrewAI-based)
+# =============================================================================
+# Agent hierarchy: Organizer → Coordinator → Workers
+# The Organizer handles user chat tasks and cross-node routing.
+# The Coordinator manages local Workers and executes remote-received tasks.
+agents:
+
+  # ---------------------------------------------------------------------------
+  # CrewAI Framework Settings
+  # ---------------------------------------------------------------------------
+  crewai:
+    # Enable the CrewAI multi-agent framework.
+    # Options: true, false.
+    enabled: true
+
+    # CrewAI process mode.
+    # Options:
+    #   "hierarchical" — manager agent delegates to team members
+    #   "sequential"   — tasks run one after another in order
+    process: "hierarchical"
+
+    # Enable verbose CrewAI console output (token counts, delegation traces).
+    # Options: true, false.  Set false for server mode to keep logs clean.
+    verbose: false
+
+    # Enable CrewAI's built-in memory (conversation history across tasks).
+    # Options: true, false.
+    memory: false
+
+    # Max LLM requests per minute (rate-limiter shared across all agents).
+    max_rpm: 10
+
+    # Enable CrewAI execution tracing.
+    # Options: true, false.  Set false to suppress "view traces?" prompt.
+    tracing: false
+
+    # Show the "Would you like to view traces?" interactive prompt.
+    # Options: true, false.  Must be false in server mode.
+    show_traces_prompt: false
+
+  # ---------------------------------------------------------------------------
+  # Default Agent Settings (inherited by all agents unless overridden)
+  # ---------------------------------------------------------------------------
+  defaults:
+    # Default LLM model for all agents.
+    # Format: "provider/model" (e.g. "openai/gpt-4", "anthropic/claude-3-sonnet").
+    model: "flock/gpt-5.2"
+
+    # LLM sampling temperature.  Range: 0.0–2.0.
+    # Lower = more deterministic; higher = more creative.
+    temperature: 0.7
+
+    # Max tokens the LLM may generate per response.
+    max_tokens: 4096
+
+    # Per-agent execution timeout (seconds).  120 = 2 minutes.
+    timeout: 120
+
+    # Allow agents to delegate tasks to other agents.
+    # Options: true, false.  Organizer/Coordinator typically need true.
+    allow_delegation: true
+
+    # Enable verbose logging per agent.
+    # Options: true, false.  Set false for cleaner production logs.
+    verbose: true
+
+    # Automatically retry on LLM errors (rate limit, timeout, etc.).
+    # Options: true, false.
+    retry_on_error: true
+
+    # Max retries per LLM call before failing.
+    max_retries: 3
+
+    # LLM model used by CrewAI planning mode to generate step-by-step plans.
+    # Should be a fast/cheap model.  Format: "provider/model".
+    planning_llm: "flock/gpt-5.2"
+
+    # Max iterations for reasoning mode (agent reflects before acting).
+    # Higher = deeper reasoning but slower execution.
+    max_reasoning_attempts: 3
+
+  # ---------------------------------------------------------------------------
+  # Organizer Agent
+  # ---------------------------------------------------------------------------
+  # Entry point for all user chat tasks.  Delegates to Coordinator → Workers.
+  # Acts as CrewAI manager_agent (tools=[] — CrewAI requirement).
+  # Does NOT handle remote tasks received from other ANs.
+  organizer:
+    # Enable / disable the Organizer agent.
+    # Options: true, false.
+    enabled: true
+
+    # LLM model for the Organizer.
+    # Format: "provider/model".
+    model: "flock/gpt-5.2"
+
+    # CrewAI role name.
+    role: "Organizer"
+
+    # Goal prompt — instructions for the Organizer's behavior.
+    goal: |
+      You are the central orchestrator and task analyst. You excel at deeply
+      understanding user tasks, reformulating them into clear detailed goals,
+      and ensuring subtasks are well-defined and matched to each participant's
+      capabilities. The ANRouter acts as your routing advisor: it analyzes the
+      task and splits it into subtasks for the selected Agentic Nodes (local
+      Coordinator + remote ANs). You then dispatch and aggregate results.
+
+      Your responsibilities:
+      1. Task analysis: Understand user intent, implicit requirements, and
+         constraints. Reformulate vague requests into concrete, actionable goals.
+      2. For simple questions: Answer directly and concisely
+      3. For complex tasks: Ensure the routing produces detailed subtasks that
+         each participant can execute; delegate to Coordinator for local work
+      4. Aggregate results from the Coordinator and present to the user
+      5. Always provide clear, helpful responses
+
+      CRITICAL: When presenting results, lead with the ACTUAL deliverable —
+      runnable code, real data, concrete predictions, or the answer itself.
+      Never substitute plans, "approaches to", or meta-summaries for what was
+      actually produced. Deliver concrete outputs (code, data, file paths), not
+      "Key Findings" lists. The user expects execution results, not recommendations.
+      Workers run in isolated Docker containers and have tools (python_interpreter,
+      shell_command, browser) for all execution — they MUST use them for live data;
+      never claim "cannot access".
+
+    # Backstory prompt — personality context for the Organizer.
+    backstory: |
+      You are an expert task analyst and orchestrator. You are highly skilled at
+      parsing user requests, identifying what they really need, and turning
+      ambiguous or high-level asks into precise, detailed goals. You work with
+      the ANRouter to split tasks into subtasks tailored to each selected AN's
+      capabilities. You manage the local team (Coordinator + Workers) and
+      coordinate with remote Agentic Nodes. You ensure every subtask is
+      concrete and executable before dispatching.
+
+    # Tools assigned to the Organizer.
+    # MUST be [] — CrewAI's hierarchical manager cannot have tools.
+    tools: []
+
+    # Allow delegation to other agents.
+    # Options: true, false.
+    allow_delegation: true
+
+  # ---------------------------------------------------------------------------
+  # Coordinator Agent
+  # ---------------------------------------------------------------------------
+  # Dual-role agent:
+  #   1. For local tasks (from Organizer): team member receiving subtasks
+  #   2. For remote tasks (from another AN): acts as manager_agent directly
+  # Has network tools for further delegation when needed.
+  coordinator:
+    # Enable / disable the Coordinator agent.
+    # Options: true, false.
+    enabled: true
+
+    # LLM model for the Coordinator.
+    # Format: "provider/model".
+    model: "flock/gpt-5.2"
+
+    # CrewAI role name.
+    role: "local team coordinator"
+
+    # Goal prompt.
+    goal: |
+      You manage a team of specialized local workers and can also delegate
+      work to remote Agentic Nodes. Your responsibilities:
+      1. Receive task assignments from the Organizer
+      2. Analyze tasks and break them into actionable subtasks
+      3. Assign subtasks to the most suitable local workers based on their skills
+      4. When instructed by the Organizer, use delegate_to_network to send
+         subtasks to specific remote Agentic Nodes
+      5. Monitor execution progress and handle any issues
+      6. Aggregate all results (local workers + remote ANs) and report to Organizer
+      Coordinate efficiently and ensure high-quality deliverables.
+      IMPORTANT: Workers must EXECUTE tasks and produce concrete results (code,
+      data, predictions, files) — not plans or recommendations. Workers run in
+      isolated Docker containers; use python_interpreter and shell_command for
+      all code execution — never run outside the sandbox. Workers have tools to
+      fetch live data (stocks, APIs); they must use them, not claim "cannot access".
+      Report actual outputs, not "approaches to" or "we could".
+      When reporting: lead with the direct result (e.g. prediction number, key
+      metric) first, then add context. Include file paths for outputs; for
+      charts/images, reference them so they can be displayed.
+      If after genuine effort the task is impossible (e.g. data unavailable,
+      tool failure, constraint violation), state clearly: "I cannot complete this
+      because [specific reason]" — we will accept that and stop refinement.
+
+    # Backstory prompt.
+    backstory: |
+      You are an experienced project coordinator who manages a diverse team of
+      specialists including developers, ML engineers, product managers, and QA
+      testers. You understand each team member's strengths and know how to
+      orchestrate them for optimal results. You can also delegate specialized
+      work to remote Agentic Nodes when the Organizer routes tasks through you.
+      You ensure smooth collaboration and timely delivery.
+
+    # Tools assigned to the Coordinator.
+    # Options: any combination of registered tool names.
+    #   "delegate_to_network" — send tasks to remote ANs
+    #   "search_network"      — discover remote AN capabilities
+    tools:
+      - "delegate_to_network"
+      - "search_network"
+
+    # Allow delegation to Workers.
+    # Options: true, false.
+    allow_delegation: true
+
+    # Max number of Workers the Coordinator can manage simultaneously.
+    max_workers: 5
+
+  # ---------------------------------------------------------------------------
+  # Worker Selection
+  # ---------------------------------------------------------------------------
+  # Workers run in isolated Docker containers. Each worker has tools
+  # (python_interpreter, shell_command, file_read, file_write, browser) that
+  # execute inside the container — use these for all code execution.
+  #
+  # Worker blueprints are defined in Python (teaming24/agent/workers/).
+  # Here we list WHICH workers to activate by their registered name.
+  #
+  #   dev_mode.enabled = true  → dev_workers list is loaded
+  #   dev_mode.enabled = false → prod_workers list is loaded
+
+  # Dev workers — 16 workers across 4 simulated Agentic Nodes
+  dev_workers:
+    # Node Alpha — FinTech & Business Analytics
+    - "financial_analyst"
+    - "quant_researcher"
+    - "data_analyst"
+    - "blockchain_dev"
+    # Node Beta — Software Engineering & Architecture
+    - "fullstack_dev"
+    - "systems_architect"
+    - "devops_engineer"
+    - "security_engineer"
+    # Node Gamma — AI Research & Algorithm Design
+    - "ml_scientist"
+    - "algorithm_designer"
+    - "nlp_engineer"
+    - "cv_engineer"
+    # Node Delta — QA, Documentation & Project Delivery
+    - "qa_engineer"
+    - "technical_writer"
+    - "project_manager"
+    - "ux_designer"
+
+  # Predefined demo worker groups by node ID.
+  # These groups are intended for demo startup selection.
+  simulation_worker_groups:
+    "0":  # Alpha
+      - "financial_analyst"
+      - "quant_researcher"
+      - "data_analyst"
+      - "blockchain_dev"
+    "1":  # Beta
+      - "fullstack_dev"
+      - "systems_architect"
+      - "devops_engineer"
+      - "security_engineer"
+    "2":  # Gamma
+      - "ml_scientist"
+      - "algorithm_designer"
+      - "nlp_engineer"
+      - "cv_engineer"
+    "3":  # Delta
+      - "qa_engineer"
+      - "technical_writer"
+      - "project_manager"
+      - "ux_designer"
+
+  # Startup-selected demo worker group ID.
+  # Change this one number to load one predefined demo group from
+  # simulation_worker_groups above.
+  demo_active_group_id: 0
+
+  # Production workers — focused subset for deployment
+  prod_workers:
+    - "fullstack_dev"
+    - "ml_scientist"
+    - "data_analyst"
+    - "qa_engineer"
+
+  # Per-worker parameter overrides (merged on top of Python-defined defaults).
+  # Keys are registered worker names; values are dicts of parameter overrides.
+  # Overridable: model, temperature, max_tokens, allow_delegation, verbose, etc.
+  # Example:
+  #   worker_overrides:
+  #     fullstack_dev:
+  #       model: "openai/gpt-4"
+  #       allow_delegation: true
+  worker_overrides: {}
+
+
+# =============================================================================
+# AN ROUTER CONFIGURATION
+# =============================================================================
+# The ANRouter decides which Agentic Node Workforce Pool members handle each task.
+# Pool = local team coordinator + all connected Remote ANs.
+# This layer is completely independent of CrewAI.
+an_router:
+
+  # Routing strategy — how the ANRouter makes its decision.
+  # Options:
+  #   "organizer_llm"  — one LLM call decides routing before CrewAI runs
+  #   "algorithmic"    — deterministic capability-based scoring (future)
+  strategy: "organizer_llm"
+
+  # LLM model for the routing decision.
+  # Should be fast and cheap (single structured-output call).
+  # Format: "provider/model".
+  model: "flock/gpt-5.2"
+
+  # ── LLM call parameters ──
+
+  # Temperature for the routing LLM call.
+  # Low values (0.0–0.2) produce more deterministic routing.
+  # Range: 0.0–2.0.
+  routing_temperature: 0.1
+
+  # Max tokens for the routing LLM response.
+  # The response is a JSON object — 1000 tokens is usually sufficient.
+  routing_max_tokens: 1000
+
+  # ── Pool member selection ──
+
+  # Minimum number of pool members the ANRouter MUST assign per task.
+  # Enforced after LLM decision — if the LLM selects fewer, unselected
+  # members are added automatically.  Default: 2 (local team coordinator + at
+  # least one remote AN when available).
+  # Note: when pool has fewer members than this value, all available
+  # members are selected and a warning is logged.
+  # Range: 1–N (where N = current pool size).
+  min_pool_members: 2
+
+  # Hint the LLM to prefer remote ANs when both local and remote can
+  # handle the task.  Useful for offloading compute.
+  # Options: true, false.
+  prefer_remote: false
+
+  # Minimum capability-overlap score (0.0–1.0) for a pool member to be
+  # considered eligible.  Only used in "algorithmic" strategy.
+  capability_match_threshold: 0.3
+
+  # ── Delegation loop prevention ──
+
+  # Maximum length of the delegation chain (number of hops) before the
+  # receiving AN rejects the task with HTTP 409.
+  # Prevents: A→B→C→D→E→F (too deep) or A→B→A (loop).
+  max_delegation_depth: 5
+
+  # ── Remote task dispatch (async submit + SSE subscribe) ──
+
+  # Timeout for the initial HTTP POST that submits a task to a remote AN
+  # (the remote returns a task_id immediately in async mode).
+  remote_submit_timeout: 30.0
+
+  # Max seconds to monitor the remote task's SSE stream before giving up.
+  # Increase for long ML/data tasks (e.g. 900–1200).
+  remote_sse_timeout: 900.0
+
+  # Interval between GET /api/agent/tasks/{id} polls when SSE is unavailable.
+  remote_poll_interval: 5.0
+
+  # Total timeout for the polling fallback loop.
+  remote_poll_timeout: 900.0
+
+  # HTTP timeout for each individual poll GET request.
+  remote_poll_http_timeout: 15.0
+
+  # ── HTTP connection-level timeouts for remote dispatch (seconds) ──
+
+  # TCP connect timeout — how long to wait for the TCP handshake.
+  remote_http_connect_timeout: 10.0
+
+  # Request write timeout — how long to wait for the request body to be sent.
+  remote_http_write_timeout: 10.0
+
+  # Connection pool timeout — how long to wait for a connection from the pool.
+  remote_http_pool_timeout: 10.0
+
+
+# =============================================================================
+# LOCAL AGENT ROUTER — selects Workers from Local Agent Workforce Pool
+# =============================================================================
+# The Local Agent Workforce Pool contains ALL Workers. Before each subtask,
+# the LocalAgentRouter selects a subset and assigns sub-subtasks.
+# This is the Worker-level counterpart to the ANRouter (AN-level).
+local_agent_router:
+  # LLM model for Worker selection. Defaults to an_router.model if not set.
+  model: "flock/gpt-5.2"
+  routing_temperature: 0.2
+  routing_max_tokens: 1000
+
+
+# =============================================================================
+# NETWORK CONFIGURATION (AgentaNet)
+# =============================================================================
+network:
+
+  # Automatically go online and start LAN discovery when the server starts.
+  # Options: true, false.
+  auto_online: true
+
+  # ---------------------------------------------------------------------------
+  # Local Node Identity
+  # ---------------------------------------------------------------------------
+  #
+  # Identity model:
+  #   an_id           — canonical unique ID for this AN instance.
+  #                     Format: {wallet_address}-{6 random hex}.
+  #                     Generated automatically at startup.  Never set manually.
+  #                     Used in delegation chains, requester_id, loop detection.
+  #   wallet_address  — crypto wallet (0x…40 hex).  Read from YAML or
+  #                     TEAMING24_WALLET_ADDRESS env var.  Auto-generated
+  #                     from hostname + MAC if empty.
+  #   name            — human-readable display name.  Shown in dashboard,
+  #                     logs, peer discovery.  NO uniqueness requirement.
+  #                     Defaults to "{host}:{port}" if empty.
+  #
+  # All identification and comparison between ANs uses an_id, NEVER name.
+  #
+  # ---------------------------------------------------------------------------
+  local_node:
+    # Human-readable display name for the dashboard and peer discovery.
+    # Purely cosmetic — no uniqueness requirement.
+    # If empty, defaults to "{host}:{port}".
+    # Override: TEAMING24_NODE_NAME env var.
+    name: ""
+
+    # Wallet address — crypto identity of this node.
+    # Format: "0x" followed by 40 hex characters  (e.g. "0x1a2b3c…").
+    # If left empty, one is **auto-generated** from this machine's
+    # hostname + MAC address (deterministic — same machine always gets
+    # the same address).
+    # Override: TEAMING24_WALLET_ADDRESS env var.
+    wallet_address: ""
+
+    # IP address advertised to LAN/WAN peers.
+    # Set to your actual LAN IP (e.g. 192.168.1.x) for LAN visibility.
+    # Override: TEAMING24_NODE_HOST env var.
+    host: "127.0.0.1"
+
+    # Port advertised to peers.  Should match system.server.port.
+    port: 8000
+
+    # Free-text description shown in the dashboard and marketplace.
+    description: "Local node hosting Organizer, Coordinator, and Workers"
+
+    # Primary capability label.
+    capability: "General Purpose"
+
+    # Geographic region label (for marketplace filtering).
+    region: "Local"
+
+  # ---------------------------------------------------------------------------
+  # LAN Discovery (UDP Broadcast)
+  # ---------------------------------------------------------------------------
+  discovery:
+    # Enable zero-config LAN discovery via UDP broadcast.
+    # Options: true, false.
+    enabled: true
+
+    # If false, only listen for other nodes' broadcasts (do not send).
+    # Set to false when your network blocks UDP broadcast (e.g. guest WiFi) to avoid "no route to host" warnings.
+    broadcast_enabled: true
+
+    # UDP port for broadcast and listen.  All ANs on the LAN must use the same port (default 54321).
+    # The listener binds to 0.0.0.0:broadcast_port so other nodes can discover this one.
+    # Range: 1024–65535.
+    broadcast_port: 54321
+
+    # Seconds between broadcast announcements.
+    broadcast_interval: 5
+
+    # A node not seen for this many seconds is considered expired.
+    node_expiry_seconds: 30
+
+    # Seconds between cleanup sweeps that remove expired nodes.
+    cleanup_interval: 10
+
+    # Max LAN nodes to track (prevents memory exhaustion).
+    max_lan_nodes: 1000
+
+    # Max WAN (directly connected) nodes to allow.
+    max_wan_nodes: 100
+
+    # Timeout for the UDP recvfrom() call in the listener loop (seconds).
+    # Lower values make the loop more responsive to shutdown; higher values
+    # reduce CPU usage.
+    udp_receive_timeout: 1.0
+
+    # UDP receive buffer size in bytes.
+    # Keep this large enough to avoid truncating legacy peer payloads.
+    udp_recv_buffer_size: 65535
+
+    # Target payload size for outbound LAN node packets.
+    # Staying near MTU avoids IP fragmentation and packet loss.
+    udp_payload_target_bytes: 1200
+
+    # De-duplication window for repeated discover requests received via
+    # multiple broadcast addresses during the same scan cycle.
+    discover_dedupe_window_s: 1.0
+
+    # Seconds to wait after startup before sending the first broadcast.
+    # Gives the server time to finish initialization.
+    broadcast_initial_delay: 1.0
+
+    # Seconds to wait after a broadcast error before retrying.
+    broadcast_error_delay: 5.0
+
+  # ---------------------------------------------------------------------------
+  # Connection Settings
+  # ---------------------------------------------------------------------------
+  connection:
+    # Overall connection timeout for outbound peer connections (seconds).
+    timeout: 30
+
+    # Number of retry attempts when a connection fails.
+    retry_attempts: 3
+
+    # Seconds between retries.
+    retry_delay: 5
+
+    # Interval for keepalive pings to connected peers (seconds).
+    keepalive_interval: 60
+
+    # HTTP timeout for the handshake POST to a peer's /api/network/handshake.
+    handshake_timeout: 5.0
+
+    # HTTP timeout for GET /api/info requests to peers.
+    peer_info_timeout: 5.0
+
+    # HTTP timeout for connect/disconnect operations to a peer.
+    connect_node_timeout: 5.0
+
+  # ---------------------------------------------------------------------------
+  # Messaging
+  # ---------------------------------------------------------------------------
+  messaging:
+    # Max size of a single network message (bytes).  1048576 = 1 MB.
+    max_message_size: 1048576
+
+    # Size of the in-memory message queue per peer.
+    # Larger = more buffering; smaller = lower memory.
+    queue_size: 1000
+
+    # Messages older than this (seconds) are discarded.
+    message_ttl: 3600
+
+  # ---------------------------------------------------------------------------
+  # SSE Subscription (Server-Sent Events)
+  # ---------------------------------------------------------------------------
+  subscription:
+    # Max events buffered per subscriber before older events are dropped.
+    max_queue_size: 100
+
+    # Max simultaneous SSE subscribers (Dashboard + Chat connections).
+    max_subscribers: 100
+
+    # Seconds between SSE keep-alive pings to prevent connection timeout.
+    keepalive_interval: 15
+
+  # ---------------------------------------------------------------------------
+  # AgentaNet Central Service
+  # ---------------------------------------------------------------------------
+  agentanet_central:
+    # URL of the AgentaNet Central registration / marketplace service.
+    # Change to your Central instance or production URL.
+    url: "http://100.64.1.3:8080"
+
+    # API token obtained from the Central Service (required for marketplace).
+    # Leave empty if not registered.  Use ${ENV_VAR} for secrets.
+    token: ""
+
+    # How often this node sends a heartbeat to Central (seconds).
+    heartbeat_interval: 60
+
+    # Enable or disable integration with Central.
+    # Options: true, false.
+    enabled: true
+
+    # HTTP timeout for the marketplace register call (seconds).
+    register_timeout: 10.0
+
+    # HTTP timeout for heartbeat calls (seconds).
+    heartbeat_http_timeout: 5.0
+
+    # HTTP timeout for marketplace search calls (seconds).
+    search_timeout: 10.0
+
+    # Page size used when pulling marketplace nodes from central.
+    search_page_size: 100
+
+    # Max pages fetched per search request to avoid unbounded loops.
+    search_max_pages: 20
+
+    # HTTP timeout for get-node-by-id calls (seconds).
+    get_node_timeout: 5.0
+
+    # Cache TTL for marketplace fallback data when Central is unreachable (seconds).
+    marketplace_cache_ttl: 300.0
+
+  # ---------------------------------------------------------------------------
+  # Marketplace
+  # ---------------------------------------------------------------------------
+  marketplace:
+    # Legacy marketplace URL.  Deprecated — use agentanet_central.url instead.
+    url: "http://100.64.1.3:8080/api/marketplace"
+
+    # Automatically rejoin the marketplace on startup if this node was listed before.
+    # Options: true, false.
+    auto_rejoin: true
+
+  # ---------------------------------------------------------------------------
+  # Pre-configured Remote Nodes
+  # ---------------------------------------------------------------------------
+  # Static list of remote ANs to connect to on startup (in addition to
+  # LAN-discovered and marketplace-discovered nodes).
+  # Each entry has:
+  #   name     — Human-readable label (optional).
+  #   endpoint — Base URL of the remote AN (e.g. "https://cloud.agentanet.io").
+  #   region   — Geographic label for filtering (optional).
+  #   api_key  — Optional API key for auth (use ${ENV_VAR}).
+  remote_nodes: []
+  # Example:
+  #   - name: "Cloud AN"
+  #     endpoint: "https://cloud.agentanet.io"
+  #     region: "US-West"
+  #     api_key: "${CLOUD_AN_API_KEY}"
+
+
+# =============================================================================
+# CHANNELS — Multi-channel messaging (Telegram, Slack, Discord)
+# =============================================================================
+# Each channel adapter connects to a messaging platform and normalises
+# inbound messages into a common InboundMessage format.
+
+channels:
+  # Telegram channel.  Requires bot token from @BotFather.
+  telegram:
+    enabled: false
+    accounts:
+      default:
+        bot_token: "${TELEGRAM_BOT_TOKEN}"  # Bot API token.
+
+  # Slack channel.  Requires bot token and app-level token.
+  slack:
+    enabled: false
+    accounts:
+      default:
+        bot_token: "${SLACK_BOT_TOKEN}"   # OAuth Bot token (xoxb-...).
+        app_token: "${SLACK_APP_TOKEN}"   # App-level token (xapp-...).
+
+  # Discord channel.  Requires bot token from Discord Developer Portal.
+  discord:
+    enabled: false
+    accounts:
+      default:
+        token: "${DISCORD_BOT_TOKEN}"    # Bot token.
+
+
+# =============================================================================
+# BINDINGS — Route inbound channel messages to agents
+# =============================================================================
+# Most-specific match wins. Unmatched messages go to the default agent.
+#
+# Each binding has:
+#   agent_id — Agent to handle messages (e.g. "main").
+#   match    — Conditions for this binding:
+#     channel    — "webchat", "telegram", "slack", "discord".
+#     account_id — Channel account (e.g. "default") for multi-account setups.
+#     peer_id    — Optional: specific user/chat ID (most specific).
+
+bindings:
+  - agent_id: "main"
+    match:
+      channel: "webchat"   # Web chat UI messages.
+
+  # Example: route all Telegram messages to the main agent
+  # - agent_id: "main"
+  #   match:
+  #     channel: "telegram"
+  #     account_id: "default"
+
+
+# =============================================================================
+# SESSION — Conversation session management
+# =============================================================================
+# Controls how inbound messages are grouped into sessions.
+# Sessions hold conversation history for context in multi-turn chat.
+
+session:
+  # How direct messages are scoped into sessions:
+  #   "main"             — all DMs share one global session.
+  #   "per-peer"         — one session per sender across all channels.
+  #   "per-channel-peer" — one session per (channel, sender) — recommended.
+  dm_scope: "per-channel-peer"
+
+  # Minutes of inactivity before a session auto-resets.
+  # 0 = never reset automatically.
+  idle_minutes: 120
+
+  # Chat commands that trigger an immediate session reset.
+  # User sends one of these to start a fresh conversation.
+  reset_triggers:
+    - "/new"
+    - "/reset"
+
+
+# =============================================================================
+# SCHEDULER — Cron/scheduled task execution
+# =============================================================================
+# Runs agent tasks on a schedule (cron expression or fixed interval).
+# Each job creates a task via the normal Organizer flow.
+
+scheduler:
+  # Auto-start the scheduler when the server starts.
+  # Options: true, false.
+  auto_start: false
+
+  # Pre-defined scheduled jobs (can also be added via API).
+  # Each job has:
+  #   name            — Unique identifier for the job.
+  #   prompt          — Task prompt sent to the agent.
+  #   cron            — Cron expression (e.g. "0 9 * * *" = 9 AM daily).
+  #   interval_seconds — Alternative to cron: run every N seconds.
+  #   agent_id        — Agent to execute (e.g. "main").
+  jobs: []
+  # Example:
+  #   - name: "daily-report"
+  #     prompt: "Generate a summary of today's completed tasks"
+  #     cron: "0 9 * * *"        # 9 AM daily
+  #     agent_id: "main"
+  #   - name: "health-check"
+  #     prompt: "Check system health and report any issues"
+  #     interval_seconds: 3600   # Every hour
+
+
+# =============================================================================
+# TOOLS CONFIGURATION
+# =============================================================================
+# Configure tools available to agents.  Each tool can be enabled/disabled
+# independently.
+tools:
+
+  # ---------------------------------------------------------------------------
+  # Browser Automation (Playwright-based)
+  # ---------------------------------------------------------------------------
+  browser:
+    # Enable browser tool for agents.  Options: true, false.
+    enabled: true
+
+    # Run browser without a visible window.  Options: true, false.
+    headless: true
+
+    # Browser viewport dimensions (pixels).  Affects screenshot size.
+    viewport:
+      width: 1280
+      height: 720
+
+    # Page-load and action timeout (milliseconds).  30000 = 30 seconds.
+    timeout: 30000
+
+    # Custom User-Agent string.  null = use browser default.
+    user_agent: null
+
+  # ---------------------------------------------------------------------------
+  # Code Sandbox (Docker-based, for tools.sandbox tool config)
+  # ---------------------------------------------------------------------------
+  sandbox:
+    # Enable code sandbox tool.  Options: true, false.
+    enabled: true
+
+    # Docker image for the sandbox container.
+    image: "python:3.11-slim"
+
+    # Execution timeout per command (seconds).  300 = 5 minutes.
+    timeout: 300
+
+    # Container memory limit.  Format: "512m", "1g", "2g".
+    memory_limit: "512m"
+
+    # CPU limit.  "1.0" = 1 core, "0.5" = half a core.
+    cpu_limit: "1.0"
+
+    # Allow network access inside the sandbox.
+    # Options: true, false.  false = more secure (no outbound HTTP).
+    network_enabled: false
+
+    # Mount the host workspace into the sandbox.
+    # Options: true, false.  true = agents can access project files.
+    mount_workspace: false
+
+  # ---------------------------------------------------------------------------
+  # Web Search
+  # ---------------------------------------------------------------------------
+  search:
+    # Enable web search tool.  Options: true, false.
+    enabled: true
+
+    # Search provider backend.
+    # Options: "google", "bing", "duckduckgo".  Each may require different API setup.
+    provider: "google"
+
+    # API key for the search provider.  Use ${ENV_VAR} syntax.
+    # Google: Custom Search API key + Search Engine ID.
+    api_key: "${SEARCH_API_KEY}"
+
+    # Maximum results to return per query.
+    max_results: 10
+
+  # ---------------------------------------------------------------------------
+  # File System
+  # ---------------------------------------------------------------------------
+  filesystem:
+    # Enable file system tool.  Options: true, false.
+    enabled: true
+
+    # List of allowed paths the tool may access.  Supports ~ expansion.
+    # Agents cannot read/write outside these paths.
+    allowed_paths:
+      - "~/.teaming24/workspace"
+
+    # Max file size the tool will read/write (bytes).  10485760 = 10 MB.
+    max_file_size: 10485760
+
+  # ---------------------------------------------------------------------------
+  # Network Delegation Tools (delegate_to_network, search_network)
+  # ---------------------------------------------------------------------------
+  network:
+    # HTTP timeout for the POST request when delegating a task to a remote AN (seconds).
+    # Should be generous — remote returns task_id quickly; execution is async.
+    http_timeout: 120.0
+
+    # Timeout for the synchronous wrapper around the async delegation call (seconds).
+    sync_timeout: 120
+
+    # Default maximum cost (in mock payment units) the agent is willing to pay
+    # when delegating.  Set higher to allow more expensive remote tasks.
+    default_max_cost: 1.0
+
+  # ---------------------------------------------------------------------------
+  # OpenHands Agent Tools (shell, file read/write, python, browser)
+  # ---------------------------------------------------------------------------
+  openhands_tools:
+    # Default timeout for shell commands executed via ShellCommandTool (seconds).
+    shell_timeout: 60
+
+    # Extra seconds added to shell_timeout for the synchronous wrapper.
+    # Total sync timeout = shell_timeout + shell_sync_timeout_buffer.
+    shell_sync_timeout_buffer: 10
+
+    # Timeout for FileReadTool synchronous operations (seconds).
+    file_read_timeout: 30
+
+    # Timeout for FileWriteTool synchronous operations (seconds).
+    file_write_timeout: 30
+
+    # Timeout for PythonInterpreterTool execution (seconds).  120 = 2 min.
+    python_timeout: 120
+
+    # Timeout for BrowseURLTool page fetching (seconds).
+    browser_timeout: 60
+
+    # ── Output Sandboxing ──
+    # Force all file_write operations from agents into the task-specific
+    # output directory: {output.base_dir}/{task_id}/workspace/
+    # This prevents agents from modifying the project source tree or
+    # host filesystem.
+    # Options: true, false.  STRONGLY recommended to keep true.
+    force_output_sandbox: true
+
+
+# =============================================================================
+# RUNTIME CONFIGURATION
+# =============================================================================
+# Controls how agents execute code, manage sandboxes, and store context.
+runtime:
+
+  # ---------------------------------------------------------------------------
+  # Default Runtime Backend
+  # ---------------------------------------------------------------------------
+  # Workers prefer isolated environments (Docker container). All code execution,
+  # sandbox operations run inside the container.
+  # Options:
+  #   "openhands" — OpenHands SDK runtime (Docker container, recommended)
+  #   "sandbox"   — Teaming24's native Docker sandbox (no extra packages)
+  #   "local"     — Run directly on the host (no isolation — use for testing only)
+  # Default: openhands (Docker isolated). Fallback: sandbox → local if openhands fails.
+  default: "openhands"
+
+  # ---------------------------------------------------------------------------
+  # Sandbox Pool
+  # ---------------------------------------------------------------------------
+  # Pre-warmed Docker containers that agents acquire/release for instant reuse.
+  sandbox_pool:
+    # Minimum number of warm sandboxes to maintain (pre-created on startup).
+    # 0 = create on demand; >0 = keep warm for faster first-task latency.
+    min_size: 0
+
+    # Maximum concurrent sandboxes allowed.  Prevents resource exhaustion.
+    max_size: 10
+
+    # Remove idle sandboxes after this many seconds of no use.
+    idle_timeout: 300
+
+    # Timeout for creating (pulling image + starting container) a new sandbox (seconds).
+    creation_timeout: 60.0
+
+  # ---------------------------------------------------------------------------
+  # Sandbox Container Defaults
+  # ---------------------------------------------------------------------------
+  # Default settings for Docker sandbox containers.
+  sandbox:
+    # Docker image used for sandbox containers.
+    docker_image: "ghcr.io/agent-infra/sandbox:latest"
+
+    # Memory limit per sandbox container (MB).  2048 = 2 GB.
+    max_memory_mb: 2048
+
+    # Default command execution timeout inside the sandbox (seconds).  300 = 5 min.
+    default_timeout: 300.0
+
+    # URL of the sandbox container's HTTP API (for API-backend mode).
+    api_url: "http://localhost:8080"
+
+    # Max seconds to wait for the sandbox to report "ready" after container start.
+    ready_timeout: 30.0
+
+    # Docker --shm-size flag.  Needed for browser automation (Chromium).
+    # Format: "256m", "512m", "1g".  Larger = more stable for heavy pages.
+    shm_size: "512m"
+
+    # Max seconds to wait for the container's internal API server to respond.
+    api_ready_timeout: 30.0
+
+    # Interval between readiness probe requests (seconds).
+    api_ready_check_interval: 0.5
+
+    # HTTP timeout for each readiness probe / health-check request (seconds).
+    health_check_timeout: 2.0
+
+    # Seconds to wait when issuing `docker stop` before force-killing (SIGKILL).
+    stop_timeout: 3
+
+    # Enable Playwright/Chromium browser automation inside the sandbox.
+    # Options: true, false.  Required for browser tool.
+    enable_browser: true
+
+    # Enable VNC server inside the sandbox for visual monitoring.
+    # Options: true, false.  Allows viewing agent browser sessions.
+    enable_vnc: false
+
+    # Extra env vars passed to sandbox container.  Defaults include
+    # UVICORN_ACCESS_LOG=false and LOG_LEVEL=WARNING to reduce log noise.
+    # Override via extra_env if needed (e.g. UVICORN_ACCESS_LOG: "true" for debugging).
+
+  # ---------------------------------------------------------------------------
+  # OpenHands Runtime (Default — Isolated Docker)
+  # ---------------------------------------------------------------------------
+  # Workers run in isolated Docker containers. All code execution, file ops,
+  # shell commands happen inside the container.
+  # Requires: uv pip install openhands-sdk openhands-tools openhands-workspace
+  openhands:
+    # Enable the OpenHands runtime backend.
+    # Options: true, false.  Requires: uv pip install openhands-sdk openhands-tools.
+    enabled: true
+
+    # OpenHands runtime type. "docker" = isolated container (recommended).
+    # Options: "docker" (containerized), "local" (host), "remote" (external server).
+    runtime_type: "docker"
+
+    # Docker image for the OpenHands container.
+    container_image: "ghcr.io/openhands/agent-server:latest-python"
+
+    # Working directory inside the container.  Agent files are written here.
+    workspace_path: "/workspace"
+
+    # Default command timeout (seconds).  120 = 2 minutes.
+    timeout: 120
+
+    # Auto-lint code after agents make changes.
+    # Options: true, false.  Helps catch syntax errors early.
+    enable_auto_lint: true
+
+    # Enable IPython/Jupyter kernel inside the container.
+    # Options: true, false.  Allows running notebooks.
+    enable_jupyter: true
+
+    # Run without a UI (headless).
+    # Options: true, false.  true = server mode (no display).
+    headless_mode: true
+
+    # Extra environment variables passed into the OpenHands container.
+    # Format: { "VAR_NAME": "value" }.  Use ${ENV_VAR} for host env substitution.
+    env_vars: {}
+
+  # ---------------------------------------------------------------------------
+  # Task Execution
+  # ---------------------------------------------------------------------------
+  execution:
+    # Max tasks that can run simultaneously across all agents.
+    # Higher = more parallelism; lower = less resource usage.
+    max_concurrent_tasks: 5
+
+    # Per-task timeout — task is cancelled after this many seconds.
+    # 600 = 10 minutes.
+    task_timeout: 600
+
+    # Interval for saving task progress checkpoints (seconds).
+    # Used for crash recovery and progress persistence.
+    checkpoint_interval: 60
+
+  # ---------------------------------------------------------------------------
+  # Memory / Context
+  # ---------------------------------------------------------------------------
+  memory:
+    # Master switch for durable local agent memory.
+    enabled: true
+
+    # Context storage backend for agent conversation history.
+    # Options: "local" (in-process), "redis", "postgres".
+    backend: "local"
+
+    # Max context length in tokens before truncation/compression.
+    # Exceeding this triggers summarization or dropping older messages.
+    max_context_length: 100000
+
+    # Respect the context window when rebuilding execution prompts.
+    # Disable this only if you explicitly want unbounded prompt growth.
+    respect_context_window: true
+
+    # Enable automatic context compression when approaching max_context_length.
+    # Options: true, false.  true = summarize old messages to free space.
+    compression_enabled: true
+
+    # Max chars retained from each historical chat message when rebuilding an
+    # execution prompt.
+    chat_context_message_preview: 24000
+
+    # Minimum token headroom reserved for the model response.
+    chat_context_token_reserve: 4096
+
+    # Durable agent-memory recall injected into execution prompts.
+    agent_recall_max_chars: 8000
+    agent_recall_top_k: 5
+
+    # Semantic summary generation for completed task/chat memory writes.
+    agent_summary_trigger_chars: 4000
+    agent_summary_max_chars: 2400
+
+    # API guardrails for memory routes.
+    api_search_top_k_max: 50
+    api_recent_limit_max: 100
+
+    # Per-session durable memory budget and compaction.
+    # Each chat session has independent memory (sessions do not affect each other).
+    # persistent_max_chars applies per session when session_id is present.
+    persistent_max_chars: 200000
+    persistent_recent_keep_chars: 140000
+    persistent_min_recent_entries: 8
+    persistent_summary_max_chars: 16000
+    persistent_summary_line_chars: 320
+    persistent_compaction_max_passes: 4
+
+
+# =============================================================================
+# OUTPUT CONFIGURATION
+# =============================================================================
+# All task results — local and remote — are persisted under a unified
+# output directory.  Each task gets its own subdirectory: {base_dir}/{task_id}/
+#
+# Directory structure per task:
+#   {task_id}/
+#     manifest.json    — metadata, file list, timing, remote AN info
+#     result.txt       — raw aggregated result (local + all remote)
+#     local/           — files extracted from local Coordinator execution
+#     remote/          — results received back from remote ANs
+#       {an_name}/     — one subfolder per remote AN that participated
+#         result.txt   — raw result from that AN
+#         *.py / ...   — extracted code files
+output:
+
+  # Base directory for all task outputs.
+  # Supports ~ (expands to home directory).
+  # Override env var: TEAMING24_OUTPUT_DIR.
+  base_dir: "~/.teaming24/outputs"
+
+  # Auto-delete task output folders older than this many days.
+  # Set to 0 to disable automatic cleanup.
+  # Range: 0–3650.
+  cleanup_max_age_days: 30
+
+  # Whether to save results received from remote ANs into
+  # the task output folder (under remote/{an_name}/).
+  # Options: true, false.
+  save_remote_results: true
+
+  # Max filename length (chars). Longer names are truncated.
+  filename_max_chars: 200
+
+  # Max chars for result preview in manifest.json.
+  result_preview_max_chars: 200
+
+
+# =============================================================================
+# PAYMENT CONFIGURATION (x402 Protocol)
+# =============================================================================
+# Trustless AN-to-AN micro-payments via HTTP 402 + EIP-3009.
+payment:
+  # Master switch for the x402 payment system.
+  # Options: true, false.
+  enabled: false
+
+  # Payment mode.
+  # Options:
+  #   "mock"     — simulated payments for development (no real crypto)
+  #   "testnet"  — real transactions on a test blockchain
+  #   "mainnet"  — real transactions on production blockchain
+  mode: "mock"
+
+  # Price per task execution (in token_symbol units).
+  # This is the default cost charged for each task submitted to this node.
+  # Value is in human-readable token amount (e.g. "0.001").
+  task_price: "0.001"
+
+  # Payment token symbol — the single source of truth for the token name.
+  # Change this to switch the displayed/used token globally (e.g. "ETH", "USDC").
+  token_symbol: "ETH"
+
+  # Blockchain network for on-chain settlement.
+  network:
+    # Blockchain chain name for on-chain settlement.
+    # Options: "base", "base-sepolia", "ethereum", "ethereum-sepolia", etc.
+    name: "base-sepolia"
+    # Override RPC endpoint (null = use default for the chain).
+    # Uncomment to use a custom RPC:
+    # rpc_url: "https://sepolia.base.org"
+
+  # Payment parameters.
+  settings:
+    # Payment scheme.  Options: "exact" (pay the exact requested amount).
+    scheme: "exact"
+    # Max seconds a payment authorization remains valid before expiry.
+    timeout_seconds: 600
+    # ERC-20 token contract address on Base Sepolia (testnet).
+    default_asset: "0x4182528b6660B9c0875c6e94260A2E425F00797f"
+    # ERC-20 token contract address on Base mainnet.
+    mainnet_asset: "0x4182528b6660B9c0875c6e94260A2E425F00797f"
+
+  # Facilitator service (verifies & settles payments on-chain).
+  facilitator:
+    # URL of the x402 facilitator endpoint.
+    url: "https://x402.org/facilitator"
+    # HTTP timeout for facilitator calls (seconds).
+    timeout: 30
+    # Max retries on facilitator errors.
+    max_retries: 3
+
+  # Merchant settings (this node as a payment receiver).
+  merchant:
+    # Address where payments are received.
+    # Set via MERCHANT_ADDRESS env var or uncomment:
+    # pay_to_address: "0x..."
+    # Description shown to the payer.
+    default_description: "Payment required for this service"
+
+  # Wallet settings (this node as a payment sender).
+  wallet:
+    # How many hours a signed payment authorization is valid.
+    # Set address/key via env vars: TEAMING24_WALLET_ADDRESS, TEAMING24_WALLET_PRIVATE_KEY
+    valid_hours: 1.0
+
+  # Mock-mode behavior.
+  mock:
+    # Starting USDC balance for mock mode (no real crypto needed).
+    initial_balance: 100.0
+    # Always treat payment signatures as valid.  Options: true, false.
+    always_valid: true
+    # Always treat settlements as successful.  Options: true, false.
+    always_settled: true
+
+
+# =============================================================================
+# EXTENSIONS
+# =============================================================================
+# Plugins and extensions can be registered here.
+# Each extension has: enabled (bool), plus extension-specific settings.
+extensions:
+  # ---------------------------------------------------------------------------
+  # OpenClaw Integration
+  # ---------------------------------------------------------------------------
+  # Integration uses the Teaming24 TypeScript plugin + REST API.
+  # Plugin: packages/openclaw-plugin — install in ~/.openclaw/extensions/teaming24/
+  # API: POST /api/openclaw/execute, GET /api/openclaw/wallet, etc.
+  #
+  # Worker tools (CrewAI agents call OpenClaw HTTP POST /tools/invoke):
+  #   openclaw_browser_snapshot  → tool "browser" (navigate + snapshot)
+  #   openclaw_browser_action    → tool "browser" (navigate | act: click/type/scroll)
+  #   openclaw_notify            → tool "nodes" (action=notify)
+  #   openclaw_session_send      → tool "sessions_send" (denied on HTTP unless gateway.tools.allow)
+  #
+  # Prerequisites: OpenClaw running (https://github.com/openclaw/openclaw)
+  # Set enabled: true to: (a) mount /api/openclaw/* routes, (b) register worker tools
+  openclaw:
+    enabled: false                        # false = standalone Teaming24; true = OpenClaw integration
+    gateway_url: "ws://127.0.0.1:18789"   # OpenClaw Gateway (ws→http for worker tool calls)
+    token: ""                   # X-OpenClaw-Token for /api/openclaw/* auth (blank = local only)
+    expose_browser_tool: true
+    expose_notify_tool: true
+    expose_session_tool: false  # Default false: sessions_send denied on HTTP unless allowlisted
+    tool_timeout: 30

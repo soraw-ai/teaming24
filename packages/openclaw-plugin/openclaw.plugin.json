@@ -1,0 +1,37 @@
+{
+  "id": "teaming24",
+  "name": "Teaming24",
+  "version": "1.0.0",
+  "description": "Integrates Teaming24 multi-agent execution, distributed network, and x402 payment capabilities into OpenClaw",
+  "author": "Teaming24",
+  "configSchema": {
+    "type": "object",
+    "properties": {
+      "base_url": {
+        "type": "string",
+        "description": "Teaming24 API base URL",
+        "default": "http://localhost:8000"
+      },
+      "token": {
+        "type": "string",
+        "description": "Optional X-OpenClaw-Token for auth (leave blank for local)"
+      },
+      "stream_progress": {
+        "type": "boolean",
+        "description": "Stream step-by-step progress to the session during task execution",
+        "default": true
+      },
+      "progress_interval_ms": {
+        "type": "integer",
+        "description": "How often to send progress updates (ms)",
+        "default": 2000
+      }
+    }
+  },
+  "extensions": [
+    {
+      "id": "main",
+      "path": "./src/index.ts"
+    }
+  ]
+}

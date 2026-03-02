@@ -1,0 +1,170 @@
+# =============================================================================
+# AgentaNet Central Service Configuration
+# =============================================================================
+#
+# This is the SINGLE configuration file for AgentaNet Central Service.
+# Edit this file to configure all aspects of the system.
+#
+# Environment Variables Override:
+#   AGENTANET_SECRET_KEY     - Override security.secret_key (REQUIRED in production)
+#   AGENTANET_DB_PATH        - Override database.path
+#   AGENTANET_HOST           - Override server.host
+#   AGENTANET_PORT           - Override server.port
+#   AGENTANET_LOG_LEVEL      - Override logging.level
+#   AGENTANET_CORS_ORIGINS   - Override cors.allow_origins (comma-separated)
+#
+# =============================================================================
+
+# =============================================================================
+# SERVER CONFIGURATION
+# =============================================================================
+server:
+  host: "0.0.0.0"               # 0.0.0.0 = all interfaces, 127.0.0.1 = local only
+  port: 8080                    # Server port
+  workers: 1                    # Number of worker processes
+  reload: false                 # Auto-reload on code changes (dev only)
+
+# =============================================================================
+# FRONTEND (VITE DEV SERVER) CONFIGURATION
+# =============================================================================
+# Used by: agentanet_central/frontend/vite.config.ts
+frontend:
+  host: "0.0.0.0"               # Default listen host for central frontend page
+  port: 5173                    # Vite dev server port
+  backend_url: "http://127.0.0.1:8080"  # Proxy target for /api and /auth
+
+# =============================================================================
+# DATABASE CONFIGURATION
+# =============================================================================
+database:
+  # SQLite database path (relative to config file or absolute)
+  path: "data/agentanet.db"
+  # For PostgreSQL (future):
+  # url: "postgresql://user:pass@localhost/agentanet"
+
+# =============================================================================
+# SECURITY CONFIGURATION
+# =============================================================================
+security:
+  # JWT secret key - MUST be set via AGENTANET_SECRET_KEY env var in production!
+  # If not set, a random key is generated (sessions invalidated on restart)
+  secret_key: null
+  
+  # JWT algorithm
+  algorithm: "HS256"
+  
+  # Session token expiration (hours)
+  session_expire_hours: 24
+  
+  # Set to true when running behind HTTPS (adds Secure flag to cookies)
+  cookie_secure: false
+  
+  # Maximum request body size in bytes (default 64 KB)
+  max_request_body_bytes: 65536
+  
+  # API token settings
+  token:
+    max_per_user: 5             # Maximum tokens per user
+    prefix: "agn_"              # Token prefix
+    # Token expiration in days. null = no expiry. Set e.g. 365 for 1 year.
+    expire_days: null
+
+# =============================================================================
+# RATE LIMITING
+# =============================================================================
+rate_limit:
+  enabled: true
+  window_seconds: 60            # Time window for rate limiting
+  max_requests: 60              # Default max requests per window per IP
+  auth_max_requests: 10         # Stricter limit for login/auth endpoints
+  marketplace_max_requests: 120 # Higher limit for search/discovery
+  admin_max_requests: 300       # Limit for admin endpoints
+  cleanup_interval: 300         # Purge stale rate-limit entries every N seconds
+
+# =============================================================================
+# CORS CONFIGURATION
+# =============================================================================
+cors:
+  # In production, restrict to known origins
+  allow_origins:
+    - "*"
+  allow_credentials: false
+  allow_methods: ["*"]
+  allow_headers: ["*"]
+
+# =============================================================================
+# NODE HEALTH CHECK
+# =============================================================================
+health_check:
+  # Check interval (seconds)
+  interval: 60
+  
+  # Mark node offline if no heartbeat for this duration (seconds)
+  offline_threshold: 300        # 5 minutes
+  
+  # Remove from marketplace listing after offline for this duration (seconds)
+  delist_threshold: 3600        # 1 hour
+  
+  # Delete offline+unlisted nodes from DB after this duration (seconds)
+  purge_threshold: 2592000      # 30 days
+
+# =============================================================================
+# LOGGING CONFIGURATION
+# =============================================================================
+logging:
+  level: "INFO"                 # DEBUG, INFO, WARNING, ERROR, CRITICAL
+  format: "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+  file: null                    # Log file path (null = console only)
+
+# =============================================================================
+# ADMIN CONFIGURATION
+# =============================================================================
+admin:
+  # Enable mock username login endpoint (/auth/login). Disable in production.
+  allow_mock_login: true
+
+  # Default admin users (for mock authentication)
+  # In production, use proper GitHub OAuth
+  mock_users:
+    - username: "admin"
+      github_id: "00000001"
+      email: "admin@agentanet.io"
+      is_admin: true
+    - username: "demo"
+      github_id: "12345678"
+      email: "demo@example.com"
+      is_admin: false
+    - username: "alice"
+      github_id: "23456789"
+      email: "alice@example.com"
+      is_admin: false
+    - username: "bob"
+      github_id: "34567890"
+      email: "bob@example.com"
+      is_admin: false
+
+# =============================================================================
+# MARKETPLACE SETTINGS
+# =============================================================================
+marketplace:
+  # If false, node IP is masked in public (unauthenticated) responses.
+  # Authenticated nodes see full IP:port.
+  expose_ip_publicly: false
+  
+  # If true, Central performs a lightweight HTTP probe on register to verify
+  # the node is reachable. Failure is a warning, not a rejection.
+  verify_on_register: false
+  verify_timeout: 3.0            # Probe timeout in seconds
+  
+  # Pagination defaults
+  default_page_size: 50
+  max_page_size: 100
+
+# =============================================================================
+# GITHUB OAUTH (Production - placeholder)
+# =============================================================================
+github:
+  enabled: false                # Set to true to use real GitHub OAuth
+  client_id: "${GITHUB_CLIENT_ID}"
+  client_secret: "${GITHUB_CLIENT_SECRET}"
+  callback_url: "http://localhost:8080/auth/callback"
